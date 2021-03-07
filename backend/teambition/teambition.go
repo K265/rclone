@@ -242,6 +242,108 @@ func (f *Fs) Rmdir(ctx context.Context, dir string) error {
 	return f.srv.Remove(ctx, node)
 }
 
+func (f *Fs) Copy(ctx context.Context, src fs.Object, remote string) (fs.Object, error) {
+	srcObj, ok := src.(*Object)
+	if !ok {
+		fs.Debugf(src, "Can't copy - not same remote type")
+		return nil, fs.ErrorCantCopy
+	}
+
+	parent, err := f.srv.CreateFolder(ctx, path.Dir(path.Join(f.root, remote)))
+	if err != nil {
+		fs.Debugf(src, "Can't copy - can't create or find remote node")
+		return nil, fs.ErrorCantCopy
+	}
+
+	err = f.srv.Copy(ctx, srcObj.info, parent)
+	if err != nil {
+		return nil, errors.Wrap(err, "Copy error")
+	}
+
+	copiedNode, err := f.srv.Get(ctx, path.Join(f.root, remote), api.FileKind)
+	if err != nil {
+		return nil, errors.Wrap(err, "Copy error")
+	}
+
+	dstObj := &Object{
+		fs:     f,
+		remote: remote,
+		info:   copiedNode,
+	}
+	return dstObj, nil
+}
+
+func (f *Fs) Move(ctx context.Context, src fs.Object, remote string) (fs.Object, error) {
+	srcObj, ok := src.(*Object)
+	if !ok {
+		fs.Debugf(src, "Can't move - not same remote type")
+		return nil, fs.ErrorCantMove
+	}
+
+	parent, err := f.srv.CreateFolder(ctx, path.Dir(path.Join(f.root, remote)))
+	if err != nil {
+		fs.Debugf(src, "Can't move - can't create or find remote node")
+		return nil, fs.ErrorCantMove
+	}
+
+	err = f.srv.Move(ctx, srcObj.info, parent)
+	if err != nil {
+		return nil, errors.Wrap(err, "Move error")
+	}
+
+	movedNode, err := f.srv.Get(ctx, path.Join(f.root, remote), api.FileKind)
+	if err != nil {
+		return nil, errors.Wrap(err, "Move error")
+	}
+
+	dstObj := &Object{
+		fs:     f,
+		remote: remote,
+		info:   movedNode,
+	}
+	return dstObj, nil
+}
+
+func (f *Fs) DirMove(ctx context.Context, src fs.Fs, srcRemote, dstRemote string) error {
+	srcFs, ok := src.(*Fs)
+	if !ok {
+		fs.Debugf(srcFs, "Can't move directory - not same remote type")
+		return fs.ErrorCantDirMove
+	}
+
+	srcNode, err := f.srv.Get(ctx, path.Join(srcFs.root, srcRemote), api.FolderKind)
+	if err != nil {
+		fs.Debugf(src, "Can't move directory - can't find srcNode")
+		return fs.ErrorCantDirMove
+	}
+
+	srcPath := path.Join(srcFs.root, srcRemote)
+	dstPath := path.Join(f.root, dstRemote)
+	srcParentPath := path.Dir(srcPath)
+	dstParentPath := path.Dir(dstPath)
+	if srcParentPath == dstParentPath {
+		// rename instead of moving
+		err = f.srv.Rename(ctx, srcNode, strings.TrimPrefix(dstPath, dstParentPath+"/"))
+		if err != nil {
+			return errors.Wrap(err, "DirMove error")
+		}
+
+		return nil
+	}
+
+	dstNode, err := f.srv.Get(ctx, dstParentPath, api.FolderKind)
+	if err != nil {
+		fs.Debugf(src, "Can't move directory - can't find dstNode")
+		return fs.ErrorCantDirMove
+	}
+
+	err = f.srv.Move(ctx, srcNode, dstNode)
+	if err != nil {
+		return errors.Wrap(err, "DirMove error")
+	}
+	return nil
+}
+
 // String returns a description of the Object
 func (o *Object) String() string {
 	if o == nil {
@@ -321,6 +423,9 @@ func (o *Object) Remove(ctx context.Context) error {
 
 // Check the interfaces are satisfied
 var (
-	_ fs.Fs     = (*Fs)(nil)
-	_ fs.Object = (*Object)(nil)
+	_ fs.Fs       = (*Fs)(nil)
+	_ fs.Copier   = (*Fs)(nil)
+	_ fs.Mover    = (*Fs)(nil)
+	_ fs.DirMover = (*Fs)(nil)
+	_ fs.Object   = (*Object)(nil)
 )
