@@ -242,6 +242,15 @@ func (f *Fs) Rmdir(ctx context.Context, dir string) error {
 	return f.srv.Remove(ctx, node)
 }
 
+// Copy src to this remote using server-side copy operations.
+//
+// This is stored with the remote path given
+//
+// It returns the destination Object and a possible error
+//
+// Will only be called if src.Fs().Name() == f.Name()
+//
+// If it isn't possible then return fs.ErrorCantCopy
 func (f *Fs) Copy(ctx context.Context, src fs.Object, remote string) (fs.Object, error) {
 	srcObj, ok := src.(*Object)
 	if !ok {
@@ -273,6 +282,15 @@ func (f *Fs) Copy(ctx context.Context, src fs.Object, remote string) (fs.Object,
 	return dstObj, nil
 }
 
+// Move src to this remote using server-side move operations.
+//
+// This is stored with the remote path given
+//
+// It returns the destination Object and a possible error
+//
+// Will only be called if src.Fs().Name() == f.Name()
+//
+// If it isn't possible then return fs.ErrorCantMove
 func (f *Fs) Move(ctx context.Context, src fs.Object, remote string) (fs.Object, error) {
 	srcObj, ok := src.(*Object)
 	if !ok {
@@ -304,6 +322,14 @@ func (f *Fs) Move(ctx context.Context, src fs.Object, remote string) (fs.Object,
 	return dstObj, nil
 }
 
+// DirMove moves src, srcRemote to this remote at dstRemote
+// using server-side move operations.
+//
+// Will only be called if src.Fs().Name() == f.Name()
+//
+// If it isn't possible then return fs.ErrorCantDirMove
+//
+// If destination exists then return fs.ErrorDirExists
 func (f *Fs) DirMove(ctx context.Context, src fs.Fs, srcRemote, dstRemote string) error {
 	srcFs, ok := src.(*Fs)
 	if !ok {
